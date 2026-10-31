@@ -1,0 +1,66 @@
+name: Build ShadowBoost
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    # The CMake presets use the "Visual Studio 17 2022" generator, so pin the
+    # runner image that ships VS 2022.
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # The uploaded zip had an empty extern/CommonLibSSE-NG folder (submodules are
+      # not included in GitHub's "Download ZIP"). If the checkout did not fill it,
+      # clone the fork named in .gitmodules.
+      - name: Ensure CommonLibSSE-NG is present
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "extern/CommonLibSSE-NG/CMakeLists.txt")) {
+            Remove-Item "extern/CommonLibSSE-NG" -Recurse -Force -ErrorAction SilentlyContinue
+            git clone --depth 1 --recursive https://github.com/alandtse/CommonLibSSE-NG.git extern/CommonLibSSE-NG
+          }
+          Get-Content extern/CommonLibSSE-NG/include/SKSE/Version.h | Select-String "1_7_104"
+
+      - name: Read vcpkg baseline from vcpkg.json
+        id: baseline
+        shell: pwsh
+        run: |
+          $b = (Get-Content vcpkg.json | ConvertFrom-Json).'builtin-baseline'
+          "baseline=$b" >> $env:GITHUB_OUTPUT
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: ${{ steps.baseline.outputs.baseline }}
+
+      - name: Configure (all runtimes, same preset as Build Release.bat)
+        shell: pwsh
+        run: cmake -S . --preset=ALL
+
+      - name: Build Release
+        shell: pwsh
+        run: cmake --build build --config Release
+
+      - name: Collect output
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist/SKSE/Plugins | Out-Null
+          Get-ChildItem -Path build -Recurse -Filter "ShadowBoost.dll" | Copy-Item -Destination dist/SKSE/Plugins -Force
+          Get-ChildItem -Path build -Recurse -Filter "ShadowBoost.pdb" | Copy-Item -Destination dist/SKSE/Plugins -Force
+          Copy-Item -Path package/* -Destination dist -Recurse -Force
+          Get-ChildItem dist -Recurse
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShadowBoost
+          path: dist
+          if-no-files-found: error

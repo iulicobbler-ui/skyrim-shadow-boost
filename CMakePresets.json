@@ -9,8 +9,9 @@
 		{
 			"name": "common",
 			"hidden": true,
-			"cacheVariables": {
-				"SKSE_SUPPORT_XBYAK": "ON"
+"cacheVariables": {
+    "SKSE_SUPPORT_XBYAK": "ON",
+    "BUILD_TESTS": "OFF"
 			},
 			"binaryDir": "${sourceDir}/build"
 		},

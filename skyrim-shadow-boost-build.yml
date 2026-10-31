@@ -1,0 +1,60 @@
+name: Build Shadow Boost
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Windows x64 / MSVC / Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Shadow Boost (including pinned submodules)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Checkout vcpkg at the manifest baseline
+        uses: actions/checkout@v4
+        with:
+          repository: microsoft/vcpkg
+          ref: ee12231b20c95013c6638d845d04c91559a1d1ff
+          path: .vcpkg
+
+      - name: Bootstrap vcpkg
+        shell: pwsh
+        run: |
+          $vcpkgRoot = Join-Path $env:GITHUB_WORKSPACE ".vcpkg"
+          & (Join-Path $vcpkgRoot "bootstrap-vcpkg.bat") -disableMetrics
+          if ($LASTEXITCODE -ne 0) { throw "vcpkg bootstrap failed with exit code $LASTEXITCODE" }
+          "VCPKG_ROOT=$vcpkgRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "VCPKG_DISABLE_METRICS=1" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Configure (Visual Studio 2022 x64)
+        shell: pwsh
+        run: |
+          cmake --version
+          cmake --preset ALL -DBUILD_TESTS=OFF
+          if ($LASTEXITCODE -ne 0) { throw "CMake configure failed with exit code $LASTEXITCODE" }
+
+      - name: Build Release DLL
+        shell: pwsh
+        run: |
+          cmake --build build --config Release --target ShadowBoost --parallel
+          if ($LASTEXITCODE -ne 0) { throw "MSBuild failed with exit code $LASTEXITCODE" }
+
+      - name: Upload DLL artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShadowBoost-Skyrim-1.7.104-x64-Release
+          path: build/Release/ShadowBoost.dll
+          if-no-files-found: error
+          retention-days: 14

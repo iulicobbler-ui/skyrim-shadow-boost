@@ -21,7 +21,25 @@ jobs:
       # not included in GitHub's "Download ZIP"). If the checkout did not fill it,
       # clone the fork named in .gitmodules.
 - name: Ensure CommonLibSSE-NG 7.2.0 is present
-  shell: pwsh
+        shell: pwsh
+        run: |
+          $path = "extern/CommonLibSSE-NG"
+          $revision = "7a60f4de794095d7b0f8928d1b930a52e9a7da83"
+
+          if (-not (Test-Path "$path/.git")) {
+            Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue
+            git clone https://github.com/alandtse/CommonLibSSE-NG.git $path
+            if ($LASTEXITCODE -ne 0) { throw "Clone failed" }
+          }
+
+          git -C $path fetch origin $revision
+          if ($LASTEXITCODE -ne 0) { throw "Fetch failed" }
+
+          git -C $path checkout --detach $revision
+          if ($LASTEXITCODE -ne 0) { throw "Checkout failed" }
+
+          Write-Host "Using CommonLib commit:"
+          git -C $path rev-parse HEAD
   run: |
     $path = "extern/CommonLibSSE-NG"
     $revision = "7a60f4de794095d7b0f8928d1b930a52e9a7da83"

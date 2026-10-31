@@ -20,15 +20,38 @@ jobs:
       # The uploaded zip had an empty extern/CommonLibSSE-NG folder (submodules are
       # not included in GitHub's "Download ZIP"). If the checkout did not fill it,
       # clone the fork named in .gitmodules.
-      - name: Ensure CommonLibSSE-NG is present
-        shell: pwsh
-        run: |
-          if (-not (Test-Path "extern/CommonLibSSE-NG/CMakeLists.txt")) {
-            Remove-Item "extern/CommonLibSSE-NG" -Recurse -Force -ErrorAction SilentlyContinue
-            git clone --depth 1 --recursive https://github.com/alandtse/CommonLibSSE-NG.git extern/CommonLibSSE-NG
-          }
-          Get-Content extern/CommonLibSSE-NG/include/SKSE/Version.h | Select-String "1_7_104"
+- name: Ensure CommonLibSSE-NG 7.2.0 is present
+  shell: pwsh
+  run: |
+    $path = "extern/CommonLibSSE-NG"
+    $revision = "7a60f4de794095d7b0f8928d1b930a52e9a7da83"
 
+    if (-not (Test-Path "$path/.git")) {
+      Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue
+      git clone --recursive https://github.com/alandtse/CommonLibSSE-NG.git $path
+      if ($LASTEXITCODE -ne 0) {
+        throw "Failed to clone CommonLibSSE-NG"
+      }
+    }
+
+    git -C $path fetch --depth 1 origin $revision
+    if ($LASTEXITCODE -ne 0) {
+      throw "Failed to fetch CommonLibSSE-NG 7.2.0"
+    }
+
+    git -C $path checkout --detach $revision
+    if ($LASTEXITCODE -ne 0) {
+      throw "Failed to checkout CommonLibSSE-NG 7.2.0"
+    }
+
+    $actual = (git -C $path rev-parse HEAD).Trim()
+    Write-Host "CommonLib revision: $actual"
+
+    if ($actual -ne $revision) {
+      throw "Incorrect CommonLib revision!"
+    }
+
+    Get-Content "$path/include/SKSE/Version.h" | Select-String "1_7_104"
       - name: Read vcpkg baseline from vcpkg.json
         id: baseline
         shell: pwsh
